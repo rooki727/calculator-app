@@ -1,50 +1,29 @@
 "use client";
 
 import { useState } from "react";
-import { CalculatorService } from "@/gen/calculator/v1/calculator_connect";
-import { CalculateRequest, CalculateResponse } from "@/gen/calculator/v1/calculator_pb";
-import { createPromiseClient } from "@connectrpc/connect";
-import { createConnectTransport } from "@connectrpc/connect-web";
-
-const transport = createConnectTransport({
-  baseUrl: typeof window === "undefined" ? "" : "http://localhost:8080",
-});
+import { connectClient } from "@/lib/connect-client";
+import { useMutation } from "@tanstack/react-query";
 
 export default function Calculator() {
   const [firstNumber, setFirstNumber] = useState("");
   const [secondNumber, setSecondNumber] = useState("");
   const [operation, setOperation] = useState("+");
-  const [result, setResult] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const client = createPromiseClient(CalculatorService, transport);
-
-  const handleCalculate = async () => {
-    if (!firstNumber || !secondNumber) {
-      setError("Please enter both numbers");
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const req = new CalculateRequest({
+  
+  const { mutate, data, error, isPending } = useMutation({
+    mutationFn: async () => {
+      return await connectClient.calculate({
         firstNumber: parseFloat(firstNumber),
         secondNumber: parseFloat(secondNumber),
         operation,
       });
-
-      const res = await client.calculate(req) as CalculateResponse;
-      setResult(res.result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error occurred");
-      setResult(null);
-    } finally {
-      setIsLoading(false);
     }
+  });
+
+  const handleCalculate = () => {
+    if (!firstNumber || !secondNumber) return;
+    mutate();
   };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
@@ -52,68 +31,56 @@ export default function Calculator() {
         
         {error && (
           <div className="mb-4 p-2 bg-red-100 text-red-700 rounded">
-            {error}
+            {error instanceof Error ? error.message : "Unknown error"}
           </div>
         )}
         
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              First Number
-            </label>
-            <input
-              type="number"
-              value={firstNumber}
-              onChange={(e) => setFirstNumber(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded"
-              placeholder="Enter first number"
-            />
-          </div>
+          {/* 保持原有的输入框和选择器 */}
+          <input 
+            type="number"
+            value={firstNumber}
+            onChange={(e) => setFirstNumber(e.target.value)}
+            className="w-full p-2 border border-gray-300 rounded"
+            placeholder="First number"
+          />
           
-          <div>
-            <label htmlFor="operation-select" className="block text-sm font-medium text-gray-700 mb-1">
-              Operation
-            </label>
-            <select
-              id="operation-select"
-              value={operation}
-              onChange={(e) => setOperation(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded"
-            >
-              <option value="+">Addition (+)</option>
-              <option value="-">Subtraction (-)</option>
-              <option value="*">Multiplication (*)</option>
-              <option value="/">Division (/)</option>
-            </select>
-          </div>
+          <label htmlFor="operation" className="block text-sm font-medium text-gray-700">
+            Operation
+          </label>
+          <select
+            id="operation"
+            value={operation}
+            onChange={(e) => setOperation(e.target.value)}
+            className="w-full p-2 border border-gray-300 rounded"
+          >
+            {["+", "-", "*", "/"].map(op => (
+              <option key={op} value={op}>{op}</option>
+            ))}
+          </select>
           
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Second Number
-            </label>
-            <input
-              type="number"
-              value={secondNumber}
-              onChange={(e) => setSecondNumber(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded"
-              placeholder="Enter second number"
-            />
-          </div>
+          <input
+            type="number"
+            value={secondNumber}
+            onChange={(e) => setSecondNumber(e.target.value)}
+            className="w-full p-2 border border-gray-300 rounded"
+            placeholder="Second number"
+          />
           
           <button
             onClick={handleCalculate}
-            disabled={isLoading}
+            disabled={isPending}
             className={`w-full py-2 px-4 rounded text-white font-medium ${
-              isLoading ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700"
+              isPending ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700"
             }`}
           >
-            {isLoading ? "Calculating..." : "Calculate"}
+            {isPending ? "Calculating..." : "Calculate"}
           </button>
           
-          {result !== null && (
+          {data && (
             <div className="mt-4 p-4 bg-gray-50 rounded text-center">
               <p className="text-sm text-gray-600">Result:</p>
-              <p className="text-2xl font-bold">{result}</p>
+              <p className="text-2xl font-bold">{data.result}</p>
             </div>
           )}
         </div>
